@@ -150,7 +150,8 @@ peers = set()
 @app.route('/new_transaction', methods=['POST'])
 def new_transaction():
     tx_data = request.get_json()
-    required_fields = ["author", "content"]
+    required_fields = ["transaction_id","LandHolder_aadhaar", "Land_state", "Land_district", "Land_taluk", 
+                       "Land_village", "Land_survey_number", "Land_subdivision_number"]
 
     for field in required_fields:
         if not tx_data.get(field):
