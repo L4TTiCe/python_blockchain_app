@@ -1,6 +1,6 @@
 from hashlib import sha256
 import json
-import time
+import datetime
 
 from flask import Flask, request
 import requests
@@ -36,7 +36,7 @@ class Blockchain:
         the chain. The block has index 0, previous_hash as 0, and
         a valid hash.
         """
-        genesis_block = Block(0, [], time.time(), "0")
+        genesis_block = Block(0, [], datetime.datetime.now().strftime('%s.%f'), "0")
         genesis_block.hash = genesis_block.compute_hash()
         self.chain.append(genesis_block)
 
@@ -55,9 +55,11 @@ class Blockchain:
         previous_hash = self.last_block.hash
 
         if previous_hash != block.previous_hash:
+            print("** Failed Previous hash check !!")
             return False
 
         if not Blockchain.is_valid_proof(block, proof):
+            print("** Failed valid proof check !!")
             return False
 
         block.hash = proof
@@ -87,8 +89,18 @@ class Blockchain:
         Check if block_hash is valid hash of block and satisfies
         the difficulty criteria.
         """
-        return (block_hash.startswith('0' * Blockchain.difficulty) and
-                block_hash == block.compute_hash())
+        global blockchain
+        T1 = block_hash.startswith('0' * Blockchain.difficulty)
+        T2 = block_hash == blockchain.proof_of_work(block)
+        #T2 = block_hash == block.compute_hash()
+        if not T1:
+            print("** Difficulty test failed !!!")
+        if not T2:
+            print("** Blocks hash and computed hash dont match !!!")
+            print("** Block Index: "+str(block.index))
+            print("** Block hash          : "+str(block_hash))
+            print("** Block computed hash : "+str(block.compute_hash()))
+        return (T1 and T2)
 
     @classmethod
     def check_chain_validity(cls, chain):
@@ -123,7 +135,7 @@ class Blockchain:
 
         new_block = Block(index=last_block.index + 1,
                           transactions=self.unconfirmed_transactions,
-                          timestamp=time.time(),
+                          timestamp=datetime.datetime.now().strftime('%s.%f'),
                           previous_hash=last_block.hash)
 
         proof = self.proof_of_work(new_block)
@@ -157,7 +169,7 @@ def new_transaction():
         if not tx_data.get(field):
             return "Invlaid transaction data", 404
 
-    tx_data["timestamp"] = time.time()
+    tx_data["timestamp"] = datetime.datetime.now().strftime('%s.%f')
 
     blockchain.add_new_transaction(tx_data)
 
@@ -249,6 +261,7 @@ def create_chain_from_dump(chain_dump):
             if not added:
                 raise Exception("The chain dump is tampered!!")
         else:  # the block is a genesis block, no verification needed
+            block.hash = block_data['hash']
             blockchain.chain.append(block)
     return blockchain
 
@@ -315,3 +328,34 @@ def announce_new_block(block):
     for peer in peers:
         url = "{}add_block".format(peer)
         requests.post(url, data=json.dumps(block.__dict__, sort_keys=True))
+
+
+@app.route('/update', methods=['POST'])
+def sync():
+    server_address = "http://127.0.0.1:8000"
+    
+    headers = {'Content-Type': "application/json"}
+
+    # Make a request to register with remote node and obtain information
+    try:
+        response = requests.get(server_address + "/api/chain",
+                                headers=headers)
+
+        if response.status_code == 200:
+            global blockchain
+            global peers
+            # update chain and the peers
+            chain_dump = json.loads(response.content)[0]
+            chain_dump = chain_dump['chain']
+            blockchain = create_chain_from_dump(chain_dump)
+            print(" * Synchronized Sucessfully")
+            return "Update successful", 200
+        else:
+            # if something goes wrong, pass it on to the API response
+            return response.content, response.status_code
+    except:
+        print(" * Synchronization Failed")
+
+print(" * Server Initialized")
+print(" * Synchronizing")
+sync()
