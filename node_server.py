@@ -163,7 +163,7 @@ peers = set()
 def new_transaction():
     tx_data = request.get_json()
     required_fields = ["transaction_id","LandHolder_aadhaar", "Land_state", "Land_district", "Land_taluk", 
-                       "Land_village", "Land_survey_number", "Land_subdivision_number"]
+                       "Land_village", "Land_survey_number", "Land_subdivision_number", "Land_hash"]
 
     for field in required_fields:
         if not tx_data.get(field):
